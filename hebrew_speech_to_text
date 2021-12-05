@@ -1,0 +1,65 @@
+import azure.cognitiveservices.speech as speechsdk
+import time
+
+# The script outputs a text file in Hebrew that has been transcribed from an audio file. (.wav).
+# its an implementation of Microsoft Azure Service - Speech to Text.
+
+
+def speech_to_text(subs, reg, fname, lang):
+    recognized_lines = []
+
+    speech_config = speechsdk.SpeechConfig(subscription=subs, region=reg)
+    speech_config.speech_recognition_language = lang
+    audio_config = speechsdk.audio.AudioConfig(filename=fname)
+    speech_recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_config)
+
+    # When an evt is received, the evt message appended to recognized_lines.
+    # After an evt is received, stop_continuous_recognition() is called to stop recognition.
+    # The recognition state is changed to True.
+
+    done = False
+
+    def stop_cb(evt):
+        print('CLOSING on {}'.format(evt))
+        speech_recognizer.stop_continuous_recognition()
+        nonlocal done
+        done = True
+
+    speech_recognizer.recognized.connect((lambda evt: recognized_lines.append(evt.result.text)))    # the final sentence
+    speech_recognizer.session_started.connect(lambda evt: print('SESSION STARTED: {}'.format(evt)))
+    speech_recognizer.session_stopped.connect(lambda evt: print('SESSION STOPPED {}'.format(evt)))
+    speech_recognizer.canceled.connect(lambda evt: print('CANCELED {}'.format(evt)))
+    speech_recognizer.session_stopped.connect(stop_cb)
+    speech_recognizer.canceled.connect(stop_cb)
+    speech_recognizer.start_continuous_recognition()
+    n = 0
+    while not done:
+        time.sleep(.5)
+        n += 0.5
+        if n % 10 == 0 :
+            # print(n)
+            print(recognized_lines)
+    return recognized_lines
+
+
+def create_text_file(output, recognized_lines):
+    with open(output, "w", encoding="utf8") as file:
+        file.writelines('\n'.join(recognized_lines))
+
+
+# to use:
+# change filename and output_file as you want.
+subscription = "xxx"    # from azure portal
+region = "yyy"          # from azure portal
+filename = "file.wav"
+language = "he-IL"
+output_file = "29.11.21_output.txt"
+
+
+def main():
+    recognized_lines = (line for line in speech_to_text(subscription, region, filename, language))  # generator was used because it handled large amounts of text
+    create_text_file(output_file, recognized_lines)
+
+
+if __name__ == '__main__':
+    main()
